@@ -1,11 +1,13 @@
 
-import { useState, useRef, useEffect } from 'react';
-import { Send, Bot, User, Sparkles, TrendingUp, Target, DollarSign } from 'lucide-react';
+import { useState } from 'react';
+import { Bot, User, Sparkles, Shield } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import ChatMessage from '@/components/ChatMessage';
 import MessageInput from '@/components/MessageInput';
 import TypingIndicator from '@/components/TypingIndicator';
+import EmailVerification from '@/components/EmailVerification';
+import { useSession } from '@/hooks/useSession';
+import { useNavigate } from 'react-router-dom';
 
 interface Message {
   id: string;
@@ -16,6 +18,7 @@ interface Message {
 }
 
 const Index = () => {
+  const { session, loading, createSession, destroySession } = useSession();
   const [messages, setMessages] = useState<Message[]>([
     {
       id: '1',
@@ -31,15 +34,24 @@ const Index = () => {
     }
   ]);
   const [isTyping, setIsTyping] = useState(false);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const navigate = useNavigate();
 
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  };
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-16 h-16 bg-gradient-to-r from-blue-600 to-indigo-600 rounded-full flex items-center justify-center mx-auto mb-4 animate-spin">
+            <Bot className="w-8 h-8 text-white" />
+          </div>
+          <p className="text-gray-600">Loading...</p>
+        </div>
+      </div>
+    );
+  }
 
-  useEffect(() => {
-    scrollToBottom();
-  }, [messages, isTyping]);
+  if (!session?.isVerified) {
+    return <EmailVerification onVerified={createSession} />;
+  }
 
   const handleSendMessage = async (content: string) => {
     const userMessage: Message = {
@@ -88,6 +100,10 @@ const Index = () => {
     handleSendMessage(suggestion);
   };
 
+  const handleLogout = async () => {
+    await destroySession();
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50">
       {/* Header */}
@@ -101,8 +117,18 @@ const Index = () => {
               <h1 className="text-xl font-bold text-gray-900">AI Business Advisor</h1>
               <p className="text-sm text-gray-600">Strategic insights for business growth</p>
             </div>
-            <div className="ml-auto flex items-center gap-4 text-sm text-gray-500">
-              <div className="flex items-center gap-1">
+            <div className="ml-auto flex items-center gap-4">
+              <div className="text-sm text-gray-500">
+                Logged in as: {session.email}
+              </div>
+              <Button onClick={() => navigate('/admin')} variant="outline" size="sm">
+                <Shield className="w-4 h-4 mr-2" />
+                Admin
+              </Button>
+              <Button onClick={handleLogout} variant="outline" size="sm">
+                Logout
+              </Button>
+              <div className="flex items-center gap-1 text-sm text-gray-500">
                 <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
                 Online
               </div>
@@ -123,7 +149,6 @@ const Index = () => {
             />
           ))}
           {isTyping && <TypingIndicator />}
-          <div ref={messagesEndRef} />
         </div>
 
         {/* Input Area */}
