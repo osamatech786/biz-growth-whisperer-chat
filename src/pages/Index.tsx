@@ -1,12 +1,14 @@
 
 import { useState } from 'react';
-import { Bot, User, Sparkles, Shield } from 'lucide-react';
+import { Bot, User, Sparkles, Shield, Trash2, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import ChatMessage from '@/components/ChatMessage';
 import MessageInput from '@/components/MessageInput';
 import TypingIndicator from '@/components/TypingIndicator';
 import EmailVerification from '@/components/EmailVerification';
+import ThemeToggle from '@/components/ThemeToggle';
 import { useSession } from '@/hooks/useSession';
+import { useChatManagement } from '@/hooks/useChatManagement';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 
@@ -20,6 +22,8 @@ interface Message {
 
 const Index = () => {
   const { session, loading, createSession, destroySession } = useSession();
+  const [sessionToken, setSessionToken] = useState(session?.sessionToken || '');
+  const { deleteCurrentChat, startNewChat, isDeleting } = useChatManagement(sessionToken);
   const [messages, setMessages] = useState<Message[]>([
     {
       id: '1',
@@ -39,12 +43,12 @@ const Index = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 flex items-center justify-center">
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 dark:from-slate-900 dark:via-blue-900 dark:to-indigo-900 flex items-center justify-center">
         <div className="text-center">
           <div className="w-16 h-16 bg-gradient-to-r from-blue-600 to-indigo-600 rounded-full flex items-center justify-center mx-auto mb-4 animate-spin">
             <Bot className="w-8 h-8 text-white" />
           </div>
-          <p className="text-gray-600">Loading...</p>
+          <p className="text-gray-600 dark:text-gray-300">Loading...</p>
         </div>
       </div>
     );
@@ -59,7 +63,7 @@ const Index = () => {
       await supabase
         .from('chat_messages')
         .insert({
-          session_token: session.sessionToken,
+          session_token: sessionToken,
           message_content: message.content,
           sender: message.sender,
           suggestions: message.suggestions || null
@@ -122,23 +126,70 @@ const Index = () => {
     await destroySession();
   };
 
+  const handleDeleteChat = async () => {
+    if (confirm('Are you sure you want to delete this chat? This action cannot be undone.')) {
+      const success = await deleteCurrentChat();
+      if (success) {
+        // Clear messages from UI
+        setMessages([{
+          id: '1',
+          content: "Hello! I'm your AI Business Advisor. I'm here to help you grow your business with strategic insights and actionable recommendations. What aspect of your business would you like to focus on today?",
+          sender: 'ai',
+          timestamp: new Date(),
+          suggestions: [
+            "Increase revenue streams",
+            "Improve customer retention", 
+            "Optimize operations",
+            "Market expansion strategy"
+          ]
+        }]);
+      }
+    }
+  };
+
+  const handleStartNewChat = () => {
+    const newToken = startNewChat();
+    setSessionToken(newToken);
+    setMessages([{
+      id: '1',
+      content: "Hello! I'm your AI Business Advisor. I'm here to help you grow your business with strategic insights and actionable recommendations. What aspect of your business would you like to focus on today?",
+      sender: 'ai',
+      timestamp: new Date(),
+      suggestions: [
+        "Increase revenue streams",
+        "Improve customer retention", 
+        "Optimize operations",
+        "Market expansion strategy"
+      ]
+    }]);
+  };
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 dark:from-slate-900 dark:via-blue-900 dark:to-indigo-900">
       {/* Header */}
-      <div className="border-b bg-white/80 backdrop-blur-sm sticky top-0 z-10">
+      <div className="border-b bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm sticky top-0 z-10">
         <div className="max-w-6xl mx-auto px-6 py-4">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 bg-gradient-to-r from-blue-600 to-indigo-600 rounded-xl flex items-center justify-center">
               <Bot className="w-6 h-6 text-white" />
             </div>
             <div>
-              <h1 className="text-xl font-bold text-gray-900">AI Business Advisor</h1>
-              <p className="text-sm text-gray-600">Strategic insights for business growth</p>
+              <h1 className="text-xl font-bold text-gray-900 dark:text-white">AI Business Advisor</h1>
+              <p className="text-sm text-gray-600 dark:text-gray-300">Strategic insights for business growth</p>
             </div>
             <div className="ml-auto flex items-center gap-4">
-              <div className="text-sm text-gray-500">
+              <div className="text-sm text-gray-500 dark:text-gray-400">
                 Logged in as: {session.email}
               </div>
+              <ThemeToggle />
+              <Button onClick={handleStartNewChat} variant="outline" size="sm">
+                <Plus className="w-4 h-4 mr-2" />
+                New Chat
+              </Button>
+              <Button onClick={handleDeleteChat} variant="outline" size="sm" disabled={isDeleting}>
+                <Trash2 className="w-4 h-4 mr-2" />
+                Delete Chat
+              </Button>
               <Button onClick={() => navigate('/admin')} variant="outline" size="sm">
                 <Shield className="w-4 h-4 mr-2" />
                 Admin
@@ -146,7 +197,7 @@ const Index = () => {
               <Button onClick={handleLogout} variant="outline" size="sm">
                 Logout
               </Button>
-              <div className="flex items-center gap-1 text-sm text-gray-500">
+              <div className="flex items-center gap-1 text-sm text-gray-500 dark:text-gray-400">
                 <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
                 Online
               </div>
@@ -175,8 +226,8 @@ const Index = () => {
 
       {/* Background Elements */}
       <div className="fixed inset-0 -z-10 overflow-hidden">
-        <div className="absolute top-1/4 left-1/4 w-72 h-72 bg-blue-200/30 rounded-full blur-3xl"></div>
-        <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-indigo-200/20 rounded-full blur-3xl"></div>
+        <div className="absolute top-1/4 left-1/4 w-72 h-72 bg-blue-200/30 dark:bg-blue-800/20 rounded-full blur-3xl"></div>
+        <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-indigo-200/20 dark:bg-indigo-800/10 rounded-full blur-3xl"></div>
       </div>
     </div>
   );
