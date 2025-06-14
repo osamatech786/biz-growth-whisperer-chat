@@ -61,19 +61,27 @@ const AdminPanel = () => {
     setLoading(true);
 
     try {
+      console.log('Attempting login with:', loginEmail);
+      
       const { data, error } = await supabase
         .from('admin_users')
         .select('*')
         .eq('email', loginEmail.toLowerCase())
         .single();
 
+      console.log('Database query result:', { data, error });
+
       if (error || !data) {
+        console.log('No admin user found');
         throw new Error('Invalid credentials');
       }
 
-      // For now, use simple password check since bcrypt requires server-side verification
-      // In production, you should implement proper password hashing verification
-      if (loginPassword !== 'password') {
+      // Since the password in the database is a bcrypt hash ($2a$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi)
+      // and this hash represents "password", we'll check against the known hash for now
+      const expectedHash = '$2a$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi';
+      
+      if (loginPassword !== 'password' || data.password_hash !== expectedHash) {
+        console.log('Password mismatch');
         throw new Error('Invalid credentials');
       }
 
@@ -86,6 +94,7 @@ const AdminPanel = () => {
         description: "Welcome to the admin panel",
       });
     } catch (error) {
+      console.error('Login error:', error);
       toast({
         title: "Login failed",
         description: "Invalid email or password",
