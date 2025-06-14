@@ -8,6 +8,7 @@ import TypingIndicator from '@/components/TypingIndicator';
 import EmailVerification from '@/components/EmailVerification';
 import { useSession } from '@/hooks/useSession';
 import { useNavigate } from 'react-router-dom';
+import { supabase } from '@/integrations/supabase/client';
 
 interface Message {
   id: string;
@@ -53,6 +54,21 @@ const Index = () => {
     return <EmailVerification onVerified={createSession} />;
   }
 
+  const saveMessageToDatabase = async (message: Message) => {
+    try {
+      await supabase
+        .from('chat_messages')
+        .insert({
+          session_token: session.sessionToken,
+          message_content: message.content,
+          sender: message.sender,
+          suggestions: message.suggestions || null
+        });
+    } catch (error) {
+      console.error('Failed to save message to database:', error);
+    }
+  };
+
   const handleSendMessage = async (content: string) => {
     const userMessage: Message = {
       id: Date.now().toString(),
@@ -62,10 +78,11 @@ const Index = () => {
     };
 
     setMessages(prev => [...prev, userMessage]);
+    await saveMessageToDatabase(userMessage);
     setIsTyping(true);
 
     // Simulate AI response delay
-    setTimeout(() => {
+    setTimeout(async () => {
       const aiResponses = [
         {
           content: "Great question! Let me analyze your situation. Based on current market trends, here are three strategic approaches I recommend for revenue growth...",
@@ -92,6 +109,7 @@ const Index = () => {
       };
 
       setMessages(prev => [...prev, aiMessage]);
+      await saveMessageToDatabase(aiMessage);
       setIsTyping(false);
     }, 2000);
   };

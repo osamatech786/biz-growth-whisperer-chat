@@ -1,9 +1,10 @@
+
 import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Settings, Users, Key, LogOut, Shield } from 'lucide-react';
+import { Settings, Users, Key, LogOut, Shield, Download, Trash2, MessageSquare } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 
@@ -24,12 +25,22 @@ interface AdminSettings {
   AI_API_URL: string;
 }
 
+interface ChatMessage {
+  id: string;
+  session_token: string;
+  message_content: string;
+  sender: string;
+  suggestions: string[] | null;
+  created_at: string;
+}
+
 const AdminPanel = () => {
   const [adminSession, setAdminSession] = useState<AdminSession | null>(null);
   const [loginEmail, setLoginEmail] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [collectedEmails, setCollectedEmails] = useState<CollectedEmail[]>([]);
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [settings, setSettings] = useState<AdminSettings>({ AI_API_KEY: '', AI_API_URL: '' });
   const { toast } = useToast();
 
@@ -40,6 +51,7 @@ const AdminPanel = () => {
   useEffect(() => {
     if (adminSession?.isAdmin) {
       loadCollectedEmails();
+      loadChatMessages();
       loadSettings();
     }
   }, [adminSession]);
@@ -126,6 +138,21 @@ const AdminPanel = () => {
     }
   };
 
+  const loadChatMessages = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('chat_messages')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(100);
+
+      if (error) throw error;
+      setChatMessages(data || []);
+    } catch (error) {
+      console.error('Failed to load chat messages:', error);
+    }
+  };
+
   const loadSettings = async () => {
     try {
       const { data, error } = await supabase
@@ -166,6 +193,58 @@ const AdminPanel = () => {
       toast({
         title: "Update failed",
         description: "Failed to update setting",
+        variant: "destructive"
+      });
+    }
+  };
+
+  const exportEmails = () => {
+    const csvContent = [
+      ['Email', 'Date Collected'].join(','),
+      ...collectedEmails.map(item => [
+        item.email,
+        new Date(item.created_at).toLocaleDateString()
+      ].join(','))
+    ].join('\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `collected-emails-${new Date().toISOString().split('T')[0]}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    window.URL.revokeObjectURL(url);
+
+    toast({
+      title: "Export successful",
+      description: "Email list has been exported to CSV",
+    });
+  };
+
+  const deleteAllEmails = async () => {
+    if (!confirm('Are you sure you want to delete all collected email addresses? This action cannot be undone.')) {
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from('email_verifications')
+        .delete()
+        .eq('verified', true);
+
+      if (error) throw error;
+
+      setCollectedEmails([]);
+      toast({
+        title: "Emails deleted",
+        description: "All collected email addresses have been deleted",
+      });
+    } catch (error) {
+      toast({
+        title: "Delete failed",
+        description: "Failed to delete email addresses",
         variant: "destructive"
       });
     }
@@ -241,10 +320,22 @@ const AdminPanel = () => {
           {/* Collected Emails */}
           <Card>
             <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Users className="w-5 h-5" />
-                Collected Emails ({collectedEmails.length})
-              </CardTitle>
+              <div className="flex items-center justify-between">
+                <CardTitle className="flex items-center gap-2">
+                  <Users className="w-5 h-5" />
+                  Collected Emails ({collectedEmails.length})
+                </CardTitle>
+                <div className="flex gap-2">
+                  <Button onClick={exportEmails} size="sm" variant="outline">
+                    <Download className="w-4 h-4 mr-2" />
+                    Export CSV
+                  </Button>
+                  <Button onClick={deleteAllEmails} size="sm" variant="destructive">
+                    <Trash2 className="w-4 h-4 mr-2" />
+                    Delete All
+                  </Button>
+                </div>
+              </div>
             </CardHeader>
             <CardContent>
               <div className="max-h-96 overflow-y-auto">
@@ -268,15 +359,48 @@ const AdminPanel = () => {
             </CardContent>
           </Card>
 
-          {/* Settings */}
+          {/* Chat Messages */}
           <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <MessageSquare className="w-5 h-5" />
+                Recent Chat Messages ({chatMessages.length})
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="max-h-96 overflow-y-auto space-y-3">
+                {chatMessages.map((message) => (
+                  <div key={message.id} className="border rounded-lg p-3">
+                    <div className="flex items-center gap-2 mb-2">
+                      <span className={`px-2 py-1 rounded text-xs font-medium ${
+                        message.sender === 'user' 
+                          ? 'bg-blue-100 text-blue-800' 
+                          : 'bg-green-100 text-green-800'
+                      }`}>
+                        {message.sender === 'user' ? 'User' : 'AI'}
+                      </span>
+                      <span className="text-xs text-gray-500">
+                        {new Date(message.created_at).toLocaleString()}
+                      </span>
+                    </div>
+                    <p className="text-sm text-gray-700 line-clamp-3">
+                      {message.message_content}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Settings */}
+          <Card className="lg:col-span-2">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Settings className="w-5 h-5" />
                 AI Settings
               </CardTitle>
             </CardHeader>
-            <CardContent className="space-y-4">
+            <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label htmlFor="api-key" className="block text-sm font-medium text-gray-700 mb-2">
                   AI API Key

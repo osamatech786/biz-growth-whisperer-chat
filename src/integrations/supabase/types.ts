@@ -54,6 +54,33 @@ export type Database = {
         }
         Relationships: []
       }
+      chat_messages: {
+        Row: {
+          created_at: string
+          id: string
+          message_content: string
+          sender: string
+          session_token: string
+          suggestions: string[] | null
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          message_content: string
+          sender: string
+          session_token: string
+          suggestions?: string[] | null
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          message_content?: string
+          sender?: string
+          session_token?: string
+          suggestions?: string[] | null
+        }
+        Relationships: []
+      }
       email_verifications: {
         Row: {
           created_at: string
