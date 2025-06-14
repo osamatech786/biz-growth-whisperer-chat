@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -72,7 +71,8 @@ const AdminPanel = () => {
         throw new Error('Invalid credentials');
       }
 
-      // Simple password check (in production, use proper hashing)
+      // For now, use simple password check since bcrypt requires server-side verification
+      // In production, you should implement proper password hashing verification
       if (loginPassword !== 'password') {
         throw new Error('Invalid credentials');
       }
@@ -209,7 +209,7 @@ const AdminPanel = () => {
               </Button>
             </form>
             <p className="text-xs text-gray-500 mt-4 text-center">
-              Default: admin@example.com / password
+              Use: admin@example.com / password
             </p>
           </CardContent>
         </Card>
