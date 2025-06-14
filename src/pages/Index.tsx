@@ -1,12 +1,13 @@
 
-import { useState } from 'react';
-import { Bot, User, Sparkles, Shield, Trash2, Plus } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Bot, User, Sparkles, Shield, Trash2, Plus, List } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import ChatMessage from '@/components/ChatMessage';
 import MessageInput from '@/components/MessageInput';
 import TypingIndicator from '@/components/TypingIndicator';
 import EmailVerification from '@/components/EmailVerification';
 import ThemeToggle from '@/components/ThemeToggle';
+import ChatList from '@/components/ChatList';
 import { useSession } from '@/hooks/useSession';
 import { useChatManagement } from '@/hooks/useChatManagement';
 import { useNavigate } from 'react-router-dom';
@@ -39,7 +40,14 @@ const Index = () => {
     }
   ]);
   const [isTyping, setIsTyping] = useState(false);
+  const [showChatList, setShowChatList] = useState(false);
   const navigate = useNavigate();
+
+  useEffect(() => {
+    if (session?.sessionToken) {
+      setSessionToken(session.sessionToken);
+    }
+  }, [session]);
 
   if (loading) {
     return (
@@ -57,6 +65,72 @@ const Index = () => {
   if (!session?.isVerified) {
     return <EmailVerification onVerified={createSession} />;
   }
+
+  const loadChatMessages = async (token: string) => {
+    try {
+      const { data, error } = await supabase
+        .from('chat_messages')
+        .select('*')
+        .eq('session_token', token)
+        .is('deleted_at', null)
+        .order('created_at', { ascending: true });
+
+      if (error) throw error;
+
+      if (data && data.length > 0) {
+        const loadedMessages: Message[] = data.map(msg => ({
+          id: msg.id,
+          content: msg.message_content,
+          sender: msg.sender as 'user' | 'ai',
+          timestamp: new Date(msg.created_at),
+          suggestions: msg.suggestions || undefined
+        }));
+        setMessages(loadedMessages);
+      } else {
+        // No messages found, show default welcome message
+        setMessages([{
+          id: '1',
+          content: "Hello! I'm your AI Business Advisor. I'm here to help you grow your business with strategic insights and actionable recommendations. What aspect of your business would you like to focus on today?",
+          sender: 'ai',
+          timestamp: new Date(),
+          suggestions: [
+            "Increase revenue streams",
+            "Improve customer retention", 
+            "Optimize operations",
+            "Market expansion strategy"
+          ]
+        }]);
+      }
+    } catch (error) {
+      console.error('Failed to load chat messages:', error);
+    }
+  };
+
+  const handleSessionSelect = (token: string) => {
+    setSessionToken(token);
+    loadChatMessages(token);
+    setShowChatList(false);
+  };
+
+  const handleDeleteSession = async (token: string) => {
+    try {
+      // Soft delete all messages in the session
+      const { error } = await supabase
+        .from('chat_messages')
+        .update({ deleted_at: new Date().toISOString() })
+        .eq('session_token', token)
+        .is('deleted_at', null);
+
+      if (error) throw error;
+
+      // If it's the current session, start a new one
+      if (token === sessionToken) {
+        handleStartNewChat();
+      }
+    } catch (error) {
+      console.error('Failed to delete session:', error);
+    }
+  };
 
   const saveMessageToDatabase = async (message: Message) => {
     try {
@@ -165,69 +239,89 @@ const Index = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 dark:from-slate-900 dark:via-blue-900 dark:to-indigo-900">
-      {/* Header */}
-      <div className="border-b bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm sticky top-0 z-10">
-        <div className="max-w-6xl mx-auto px-6 py-4">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-gradient-to-r from-blue-600 to-indigo-600 rounded-xl flex items-center justify-center">
-              <Bot className="w-6 h-6 text-white" />
-            </div>
-            <div>
-              <h1 className="text-xl font-bold text-gray-900 dark:text-white">AI Business Advisor</h1>
-              <p className="text-sm text-gray-600 dark:text-gray-300">Strategic insights for business growth</p>
-            </div>
-            <div className="ml-auto flex items-center gap-4">
-              <div className="text-sm text-gray-500 dark:text-gray-400">
-                Logged in as: {session.email}
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 dark:from-slate-900 dark:via-blue-900 dark:to-indigo-900 flex">
+      {/* Sidebar for Chat List */}
+      <div className={`${showChatList ? 'w-80' : 'w-0'} transition-all duration-300 overflow-hidden bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-700`}>
+        <ChatList
+          currentSessionToken={sessionToken}
+          onSessionSelect={handleSessionSelect}
+          onDeleteSession={handleDeleteSession}
+        />
+      </div>
+
+      {/* Main Chat Area */}
+      <div className="flex-1 flex flex-col">
+        {/* Header */}
+        <div className="border-b bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm sticky top-0 z-10">
+          <div className="max-w-6xl mx-auto px-6 py-4">
+            <div className="flex items-center gap-3">
+              <Button
+                onClick={() => setShowChatList(!showChatList)}
+                variant="outline"
+                size="sm"
+                className="mr-2"
+              >
+                <List className="w-4 h-4" />
+              </Button>
+              <div className="w-10 h-10 bg-gradient-to-r from-blue-600 to-indigo-600 rounded-xl flex items-center justify-center">
+                <Bot className="w-6 h-6 text-white" />
               </div>
-              <ThemeToggle />
-              <Button onClick={handleStartNewChat} variant="outline" size="sm">
-                <Plus className="w-4 h-4 mr-2" />
-                New Chat
-              </Button>
-              <Button onClick={handleDeleteChat} variant="outline" size="sm" disabled={isDeleting}>
-                <Trash2 className="w-4 h-4 mr-2" />
-                Delete Chat
-              </Button>
-              <Button onClick={() => navigate('/admin')} variant="outline" size="sm">
-                <Shield className="w-4 h-4 mr-2" />
-                Admin
-              </Button>
-              <Button onClick={handleLogout} variant="outline" size="sm">
-                Logout
-              </Button>
-              <div className="flex items-center gap-1 text-sm text-gray-500 dark:text-gray-400">
-                <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-                Online
+              <div>
+                <h1 className="text-xl font-bold text-gray-900 dark:text-white">AI Business Advisor</h1>
+                <p className="text-sm text-gray-600 dark:text-gray-300">Strategic insights for business growth</p>
+              </div>
+              <div className="ml-auto flex items-center gap-4">
+                <div className="text-sm text-gray-500 dark:text-gray-400">
+                  Logged in as: {session.email}
+                </div>
+                <ThemeToggle />
+                <Button onClick={handleStartNewChat} variant="outline" size="sm">
+                  <Plus className="w-4 h-4 mr-2" />
+                  New Chat
+                </Button>
+                <Button onClick={handleDeleteChat} variant="outline" size="sm" disabled={isDeleting}>
+                  <Trash2 className="w-4 h-4 mr-2" />
+                  Delete Chat
+                </Button>
+                <Button onClick={() => navigate('/admin')} variant="outline" size="sm">
+                  <Shield className="w-4 h-4 mr-2" />
+                  Admin
+                </Button>
+                <Button onClick={handleLogout} variant="outline" size="sm">
+                  Logout
+                </Button>
+                <div className="flex items-center gap-1 text-sm text-gray-500 dark:text-gray-400">
+                  <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                  Online
+                </div>
               </div>
             </div>
           </div>
         </div>
-      </div>
 
-      {/* Chat Container */}
-      <div className="max-w-6xl mx-auto px-6 py-6 flex flex-col h-[calc(100vh-100px)]">
-        {/* Messages Area */}
-        <div className="flex-1 overflow-y-auto space-y-6 pb-6">
-          {messages.map((message) => (
-            <ChatMessage 
-              key={message.id} 
-              message={message} 
-              onSuggestionClick={handleSuggestionClick}
-            />
-          ))}
-          {isTyping && <TypingIndicator />}
+        {/* Chat Container */}
+        <div className="flex-1 max-w-6xl mx-auto px-6 py-6 flex flex-col h-[calc(100vh-100px)]">
+          {/* Messages Area */}
+          <div className="flex-1 overflow-y-auto space-y-6 pb-6">
+            {messages.map((message) => (
+              <ChatMessage 
+                key={message.id} 
+                message={message} 
+                onSuggestionClick={handleSuggestionClick}
+              />
+            ))}
+            {isTyping && <TypingIndicator />}
+          </div>
+
+          {/* Input Area */}
+          <MessageInput onSend={handleSendMessage} disabled={isTyping} />
         </div>
 
-        {/* Input Area */}
-        <MessageInput onSend={handleSendMessage} disabled={isTyping} />
-      </div>
-
-      {/* Background Elements */}
-      <div className="fixed inset-0 -z-10 overflow-hidden">
-        <div className="absolute top-1/4 left-1/4 w-72 h-72 bg-blue-200/30 dark:bg-blue-800/20 rounded-full blur-3xl"></div>
-        <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-indigo-200/20 dark:bg-indigo-800/10 rounded-full blur-3xl"></div>
+        {/* Background Elements */}
+        <div className="fixed inset-0 -z-10 overflow-hidden">
+          <div className="absolute top-1/4 left-1/4 w-72 h-72 bg-blue-200/30 dark:bg-blue-800/20 rounded-full blur-3xl"></div>
+          <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-indigo-200/20 dark:bg-indigo-800/10 rounded-full blur-3xl"></div>
+        </div>
       </div>
     </div>
   );
