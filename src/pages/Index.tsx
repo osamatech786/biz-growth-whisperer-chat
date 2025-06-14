@@ -1,16 +1,12 @@
 
 import { useState, useEffect } from 'react';
-import { Bot, User, Sparkles, Shield, Trash2, Plus, List } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import ChatMessage from '@/components/ChatMessage';
-import MessageInput from '@/components/MessageInput';
-import TypingIndicator from '@/components/TypingIndicator';
+import { Bot } from 'lucide-react';
 import EmailVerification from '@/components/EmailVerification';
-import ThemeToggle from '@/components/ThemeToggle';
-import ChatList from '@/components/ChatList';
+import ChatHeader from '@/components/ChatHeader';
+import ChatSidebar from '@/components/ChatSidebar';
+import ChatContainer from '@/components/ChatContainer';
 import { useSession } from '@/hooks/useSession';
 import { useChatManagement } from '@/hooks/useChatManagement';
-import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 
 interface Message {
@@ -39,9 +35,7 @@ const Index = () => {
       ]
     }
   ]);
-  const [isTyping, setIsTyping] = useState(false);
   const [showChatList, setShowChatList] = useState(false);
-  const navigate = useNavigate();
 
   useEffect(() => {
     if (session?.sessionToken) {
@@ -132,70 +126,6 @@ const Index = () => {
     }
   };
 
-  const saveMessageToDatabase = async (message: Message) => {
-    try {
-      await supabase
-        .from('chat_messages')
-        .insert({
-          session_token: sessionToken,
-          message_content: message.content,
-          sender: message.sender,
-          suggestions: message.suggestions || null
-        });
-    } catch (error) {
-      console.error('Failed to save message to database:', error);
-    }
-  };
-
-  const handleSendMessage = async (content: string) => {
-    const userMessage: Message = {
-      id: Date.now().toString(),
-      content,
-      sender: 'user',
-      timestamp: new Date()
-    };
-
-    setMessages(prev => [...prev, userMessage]);
-    await saveMessageToDatabase(userMessage);
-    setIsTyping(true);
-
-    // Simulate AI response delay
-    setTimeout(async () => {
-      const aiResponses = [
-        {
-          content: "Great question! Let me analyze your situation. Based on current market trends, here are three strategic approaches I recommend for revenue growth...",
-          suggestions: ["Implement subscription model", "Launch referral program", "Expand to B2B market", "Create premium tier"]
-        },
-        {
-          content: "Customer retention is crucial for sustainable growth. Studies show it costs 5x more to acquire new customers than retain existing ones. Here's my analysis...",
-          suggestions: ["Implement loyalty program", "Improve onboarding", "Regular check-ins", "Personalized offers"]
-        },
-        {
-          content: "Operational efficiency can significantly impact your bottom line. Let me share some data-driven insights on optimization opportunities...",
-          suggestions: ["Automate repetitive tasks", "Streamline workflows", "Reduce overhead costs", "Implement KPI tracking"]
-        }
-      ];
-
-      const randomResponse = aiResponses[Math.floor(Math.random() * aiResponses.length)];
-      
-      const aiMessage: Message = {
-        id: (Date.now() + 1).toString(),
-        content: randomResponse.content,
-        sender: 'ai',
-        timestamp: new Date(),
-        suggestions: randomResponse.suggestions
-      };
-
-      setMessages(prev => [...prev, aiMessage]);
-      await saveMessageToDatabase(aiMessage);
-      setIsTyping(false);
-    }, 2000);
-  };
-
-  const handleSuggestionClick = (suggestion: string) => {
-    handleSendMessage(suggestion);
-  };
-
   const handleLogout = async () => {
     await destroySession();
   };
@@ -241,81 +171,31 @@ const Index = () => {
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 dark:from-slate-900 dark:via-blue-900 dark:to-indigo-900 flex">
       {/* Sidebar for Chat List */}
-      <div className={`${showChatList ? 'w-80' : 'w-0'} transition-all duration-300 overflow-hidden bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-700`}>
-        <ChatList
-          currentSessionToken={sessionToken}
-          onSessionSelect={handleSessionSelect}
-          onDeleteSession={handleDeleteSession}
-        />
-      </div>
+      <ChatSidebar
+        showChatList={showChatList}
+        currentSessionToken={sessionToken}
+        onSessionSelect={handleSessionSelect}
+        onDeleteSession={handleDeleteSession}
+      />
 
       {/* Main Chat Area */}
       <div className="flex-1 flex flex-col">
         {/* Header */}
-        <div className="border-b bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm sticky top-0 z-10">
-          <div className="max-w-6xl mx-auto px-6 py-4">
-            <div className="flex items-center gap-3">
-              <Button
-                onClick={() => setShowChatList(!showChatList)}
-                variant="outline"
-                size="sm"
-                className="mr-2"
-              >
-                <List className="w-4 h-4" />
-              </Button>
-              <div className="w-10 h-10 bg-gradient-to-r from-blue-600 to-indigo-600 rounded-xl flex items-center justify-center">
-                <Bot className="w-6 h-6 text-white" />
-              </div>
-              <div>
-                <h1 className="text-xl font-bold text-gray-900 dark:text-white">AI Business Advisor</h1>
-                <p className="text-sm text-gray-600 dark:text-gray-300">Strategic insights for business growth</p>
-              </div>
-              <div className="ml-auto flex items-center gap-4">
-                <div className="text-sm text-gray-500 dark:text-gray-400">
-                  Logged in as: {session.email}
-                </div>
-                <ThemeToggle />
-                <Button onClick={handleStartNewChat} variant="outline" size="sm">
-                  <Plus className="w-4 h-4 mr-2" />
-                  New Chat
-                </Button>
-                <Button onClick={handleDeleteChat} variant="outline" size="sm" disabled={isDeleting}>
-                  <Trash2 className="w-4 h-4 mr-2" />
-                  Delete Chat
-                </Button>
-                <Button onClick={() => navigate('/admin')} variant="outline" size="sm">
-                  <Shield className="w-4 h-4 mr-2" />
-                  Admin
-                </Button>
-                <Button onClick={handleLogout} variant="outline" size="sm">
-                  Logout
-                </Button>
-                <div className="flex items-center gap-1 text-sm text-gray-500 dark:text-gray-400">
-                  <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-                  Online
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
+        <ChatHeader
+          session={session}
+          onToggleChatList={() => setShowChatList(!showChatList)}
+          onStartNewChat={handleStartNewChat}
+          onDeleteChat={handleDeleteChat}
+          onLogout={handleLogout}
+          isDeleting={isDeleting}
+        />
 
         {/* Chat Container */}
-        <div className="flex-1 max-w-6xl mx-auto px-6 py-6 flex flex-col h-[calc(100vh-100px)]">
-          {/* Messages Area */}
-          <div className="flex-1 overflow-y-auto space-y-6 pb-6">
-            {messages.map((message) => (
-              <ChatMessage 
-                key={message.id} 
-                message={message} 
-                onSuggestionClick={handleSuggestionClick}
-              />
-            ))}
-            {isTyping && <TypingIndicator />}
-          </div>
-
-          {/* Input Area */}
-          <MessageInput onSend={handleSendMessage} disabled={isTyping} />
-        </div>
+        <ChatContainer
+          messages={messages}
+          setMessages={setMessages}
+          sessionToken={sessionToken}
+        />
 
         {/* Background Elements */}
         <div className="fixed inset-0 -z-10 overflow-hidden">
