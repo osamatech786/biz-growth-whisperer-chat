@@ -1,8 +1,9 @@
 
 import { useState } from 'react';
-import { Send, Mic } from 'lucide-react';
+import { Send, Mic, MicOff } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { useSpeechRecognition } from '@/hooks/useSpeechRecognition';
 
 interface MessageInputProps {
   onSend: (message: string) => void;
@@ -11,6 +12,7 @@ interface MessageInputProps {
 
 const MessageInput = ({ onSend, disabled }: MessageInputProps) => {
   const [message, setMessage] = useState('');
+  const { isRecording, isProcessing, startRecording, stopRecording } = useSpeechRecognition();
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -24,6 +26,21 @@ const MessageInput = ({ onSend, disabled }: MessageInputProps) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       handleSubmit(e);
+    }
+  };
+
+  const handleMicClick = async () => {
+    if (isRecording) {
+      try {
+        const transcript = await stopRecording();
+        if (transcript) {
+          setMessage(prev => prev + (prev ? ' ' : '') + transcript);
+        }
+      } catch (error) {
+        console.error('Error stopping recording:', error);
+      }
+    } else {
+      startRecording();
     }
   };
 
@@ -46,9 +63,19 @@ const MessageInput = ({ onSend, disabled }: MessageInputProps) => {
             type="button"
             variant="ghost"
             size="sm"
-            className="w-10 h-10 rounded-xl hover:bg-gray-100"
+            onClick={handleMicClick}
+            disabled={disabled || isProcessing}
+            className={`w-10 h-10 rounded-xl hover:bg-gray-100 ${
+              isRecording ? 'bg-red-100 text-red-600' : ''
+            }`}
           >
-            <Mic className="w-4 h-4" />
+            {isProcessing ? (
+              <div className="w-4 h-4 border-2 border-gray-400 border-t-transparent rounded-full animate-spin" />
+            ) : isRecording ? (
+              <MicOff className="w-4 h-4" />
+            ) : (
+              <Mic className="w-4 h-4" />
+            )}
           </Button>
           
           <Button
@@ -65,6 +92,7 @@ const MessageInput = ({ onSend, disabled }: MessageInputProps) => {
         <div className="flex gap-4">
           <span>Press Enter to send</span>
           <span>Shift + Enter for new line</span>
+          <span>Click mic to record speech</span>
         </div>
       </div>
     </div>
