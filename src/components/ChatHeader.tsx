@@ -1,8 +1,7 @@
 
-import { Bot, Shield, Plus, Trash2, List } from 'lucide-react';
+import { Bot, Plus, Trash2, List } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import ThemeToggle from '@/components/ThemeToggle';
-import { useNavigate } from 'react-router-dom';
 
 interface ChatHeaderProps {
   session: {
@@ -23,8 +22,6 @@ const ChatHeader = ({
   onLogout, 
   isDeleting 
 }: ChatHeaderProps) => {
-  const navigate = useNavigate();
-
   return (
     <div className="border-b bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm sticky top-0 z-10">
       <div className="max-w-6xl mx-auto px-6 py-4">
@@ -56,10 +53,6 @@ const ChatHeader = ({
             <Button onClick={onDeleteChat} variant="outline" size="sm" disabled={isDeleting}>
               <Trash2 className="w-4 h-4 mr-2" />
               Delete Chat
-            </Button>
-            <Button onClick={() => navigate('/admin')} variant="outline" size="sm">
-              <Shield className="w-4 h-4 mr-2" />
-              Admin
             </Button>
             <Button onClick={onLogout} variant="outline" size="sm">
               Logout
