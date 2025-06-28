@@ -4,6 +4,7 @@ import ChatMessage from '@/components/ChatMessage';
 import MessageInput from '@/components/MessageInput';
 import TypingIndicator from '@/components/TypingIndicator';
 import { supabase } from '@/integrations/supabase/client';
+import { useVertexAI } from '@/hooks/useVertexAI';
 
 interface Message {
   id: string;
@@ -21,6 +22,12 @@ interface ChatContainerProps {
 
 const ChatContainer = ({ messages, setMessages, sessionToken }: ChatContainerProps) => {
   const [isTyping, setIsTyping] = useState(false);
+  const { sendMessage, currentSession, setCurrentSession } = useVertexAI();
+
+  // Set the current Vertex AI session to match the chat session
+  if (currentSession !== sessionToken) {
+    setCurrentSession(sessionToken);
+  }
 
   const saveMessageToDatabase = async (message: Message) => {
     try {
@@ -49,37 +56,35 @@ const ChatContainer = ({ messages, setMessages, sessionToken }: ChatContainerPro
     await saveMessageToDatabase(userMessage);
     setIsTyping(true);
 
-    // Simulate AI response delay
-    setTimeout(async () => {
-      const aiResponses = [
-        {
-          content: "Great question! Let me analyze your situation. Based on current market trends, here are three strategic approaches I recommend for revenue growth...",
-          suggestions: ["Implement subscription model", "Launch referral program", "Expand to B2B market", "Create premium tier"]
-        },
-        {
-          content: "Customer retention is crucial for sustainable growth. Studies show it costs 5x more to acquire new customers than retain existing ones. Here's my analysis...",
-          suggestions: ["Implement loyalty program", "Improve onboarding", "Regular check-ins", "Personalized offers"]
-        },
-        {
-          content: "Operational efficiency can significantly impact your bottom line. Let me share some data-driven insights on optimization opportunities...",
-          suggestions: ["Automate repetitive tasks", "Streamline workflows", "Reduce overhead costs", "Implement KPI tracking"]
-        }
-      ];
-
-      const randomResponse = aiResponses[Math.floor(Math.random() * aiResponses.length)];
+    try {
+      // Send message to Vertex AI agent
+      const aiResponse = await sendMessage(content, sessionToken);
       
       const aiMessage: Message = {
         id: (Date.now() + 1).toString(),
-        content: randomResponse.content,
+        content: aiResponse || "I apologize, but I couldn't process your request at the moment. Please try again.",
         sender: 'ai',
-        timestamp: new Date(),
-        suggestions: randomResponse.suggestions
+        timestamp: new Date()
       };
 
       setMessages(prev => [...prev, aiMessage]);
       await saveMessageToDatabase(aiMessage);
+    } catch (error) {
+      console.error('Error sending message to Vertex AI:', error);
+      
+      // Fallback error message
+      const errorMessage: Message = {
+        id: (Date.now() + 1).toString(),
+        content: "I apologize, but I'm experiencing technical difficulties. Please try again later.",
+        sender: 'ai',
+        timestamp: new Date()
+      };
+
+      setMessages(prev => [...prev, errorMessage]);
+      await saveMessageToDatabase(errorMessage);
+    } finally {
       setIsTyping(false);
-    }, 2000);
+    }
   };
 
   const handleSuggestionClick = (suggestion: string) => {

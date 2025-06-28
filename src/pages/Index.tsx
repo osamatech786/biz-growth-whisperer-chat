@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { Bot } from 'lucide-react';
 import EmailVerification from '@/components/EmailVerification';
@@ -8,6 +7,7 @@ import ChatContainer from '@/components/ChatContainer';
 import { useSession } from '@/hooks/useSession';
 import { useChatManagement } from '@/hooks/useChatManagement';
 import { supabase } from '@/integrations/supabase/client';
+import { useVertexAI } from '@/hooks/useVertexAI';
 
 interface Message {
   id: string;
@@ -21,17 +21,18 @@ const Index = () => {
   const { session, loading, createSession, destroySession } = useSession();
   const [sessionToken, setSessionToken] = useState(session?.sessionToken || '');
   const { deleteCurrentChat, startNewChat, isDeleting } = useChatManagement(sessionToken);
+  const { createSession: createVertexSession } = useVertexAI();
   const [messages, setMessages] = useState<Message[]>([
     {
       id: '1',
-      content: "Hello! I'm your AI Business Advisor. I'm here to help you grow your business with strategic insights and actionable recommendations. What aspect of your business would you like to focus on today?",
+      content: "Hello! I'm your AI Assistant powered by Vertex AI. I'm here to help you with any questions or tasks you might have. What can I assist you with today?",
       sender: 'ai',
       timestamp: new Date(),
       suggestions: [
-        "Increase revenue streams",
-        "Improve customer retention", 
-        "Optimize operations",
-        "Market expansion strategy"
+        "Tell me about your capabilities",
+        "Help me solve a problem", 
+        "Explain a concept",
+        "Provide recommendations"
       ]
     }
   ]);
@@ -84,14 +85,14 @@ const Index = () => {
         // No messages found, show default welcome message
         setMessages([{
           id: '1',
-          content: "Hello! I'm your AI Business Advisor. I'm here to help you grow your business with strategic insights and actionable recommendations. What aspect of your business would you like to focus on today?",
+          content: "Hello! I'm your AI Assistant powered by Vertex AI. I'm here to help you with any questions or tasks you might have. What can I assist you with today?",
           sender: 'ai',
           timestamp: new Date(),
           suggestions: [
-            "Increase revenue streams",
-            "Improve customer retention", 
-            "Optimize operations",
-            "Market expansion strategy"
+            "Tell me about your capabilities",
+            "Help me solve a problem", 
+            "Explain a concept",
+            "Provide recommendations"
           ]
         }]);
       }
@@ -137,35 +138,59 @@ const Index = () => {
         // Clear messages from UI
         setMessages([{
           id: '1',
-          content: "Hello! I'm your AI Business Advisor. I'm here to help you grow your business with strategic insights and actionable recommendations. What aspect of your business would you like to focus on today?",
+          content: "Hello! I'm your AI Assistant powered by Vertex AI. I'm here to help you with any questions or tasks you might have. What can I assist you with today?",
           sender: 'ai',
           timestamp: new Date(),
           suggestions: [
-            "Increase revenue streams",
-            "Improve customer retention", 
-            "Optimize operations",
-            "Market expansion strategy"
+            "Tell me about your capabilities",
+            "Help me solve a problem", 
+            "Explain a concept",
+            "Provide recommendations"
           ]
         }]);
       }
     }
   };
 
-  const handleStartNewChat = () => {
-    const newToken = startNewChat();
-    setSessionToken(newToken);
-    setMessages([{
-      id: '1',
-      content: "Hello! I'm your AI Business Advisor. I'm here to help you grow your business with strategic insights and actionable recommendations. What aspect of your business would you like to focus on today?",
-      sender: 'ai',
-      timestamp: new Date(),
-      suggestions: [
-        "Increase revenue streams",
-        "Improve customer retention", 
-        "Optimize operations",
-        "Market expansion strategy"
-      ]
-    }]);
+  const handleStartNewChat = async () => {
+    try {
+      // Create new session in Vertex AI
+      const vertexSessionId = await createVertexSession();
+      
+      // Create new local session token
+      const newToken = startNewChat();
+      setSessionToken(newToken);
+      
+      setMessages([{
+        id: '1',
+        content: "Hello! I'm your AI Assistant powered by Vertex AI. I'm here to help you with any questions or tasks you might have. What can I assist you with today?",
+        sender: 'ai',
+        timestamp: new Date(),
+        suggestions: [
+          "Tell me about your capabilities",
+          "Help me solve a problem", 
+          "Explain a concept",
+          "Provide recommendations"
+        ]
+      }]);
+    } catch (error) {
+      console.error('Error starting new chat:', error);
+      // Fallback to local session creation
+      const newToken = startNewChat();
+      setSessionToken(newToken);
+      setMessages([{
+        id: '1',
+        content: "Hello! I'm your AI Assistant powered by Vertex AI. I'm here to help you with any questions or tasks you might have. What can I assist you with today?",
+        sender: 'ai',
+        timestamp: new Date(),
+        suggestions: [
+          "Tell me about your capabilities",
+          "Help me solve a problem", 
+          "Explain a concept",
+          "Provide recommendations"
+        ]
+      }]);
+    }
   };
 
   return (
