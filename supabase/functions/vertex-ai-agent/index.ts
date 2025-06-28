@@ -15,18 +15,19 @@ interface VertexAIRequest {
 const getAccessToken = async () => {
   const serviceAccountJson = Deno.env.get('GOOGLE_CLOUD_SERVICE_ACCOUNT_JSON');
   if (!serviceAccountJson) {
-    throw new Error('Service account JSON not found');
+    throw new Error('GOOGLE_CLOUD_SERVICE_ACCOUNT_JSON environment variable is required');
   }
 
   const serviceAccount = JSON.parse(serviceAccountJson);
   
-  // Create JWT for Google Cloud authentication
+  // Create JWT header
   const header = {
     alg: 'RS256',
     typ: 'JWT',
     kid: serviceAccount.private_key_id
   };
 
+  // Create JWT payload
   const now = Math.floor(Date.now() / 1000);
   const payload = {
     iss: serviceAccount.client_email,
@@ -36,17 +37,19 @@ const getAccessToken = async () => {
     exp: now + 3600
   };
 
-  // Import the private key - fix the key format
-  const privateKeyPem = serviceAccount.private_key
-    .replace(/\\n/g, '\n')
-    .replace(/-----BEGIN PRIVATE KEY-----/, '-----BEGIN PRIVATE KEY-----\n')
-    .replace(/-----END PRIVATE KEY-----/, '\n-----END PRIVATE KEY-----');
+  // Process the private key
+  const privateKeyPem = serviceAccount.private_key.replace(/\\n/g, '\n');
+  
+  // Remove header and footer, and clean up the key
+  const privateKeyB64 = privateKeyPem
+    .replace(/-----BEGIN PRIVATE KEY-----/, '')
+    .replace(/-----END PRIVATE KEY-----/, '')
+    .replace(/\s/g, '');
 
-  const privateKeyDer = Uint8Array.from(
-    atob(privateKeyPem.replace(/-----BEGIN PRIVATE KEY-----\n/, '').replace(/\n-----END PRIVATE KEY-----/, '').replace(/\n/g, '')),
-    c => c.charCodeAt(0)
-  );
+  // Convert base64 to Uint8Array
+  const privateKeyDer = Uint8Array.from(atob(privateKeyB64), c => c.charCodeAt(0));
 
+  // Import the private key
   const privateKey = await crypto.subtle.importKey(
     'pkcs8',
     privateKeyDer,
@@ -84,13 +87,13 @@ const getAccessToken = async () => {
     body: `grant_type=urn:ietf:params:oauth:grant-type:jwt-bearer&assertion=${jwt}`,
   });
 
-  const tokenData = await tokenResponse.json();
-  
   if (!tokenResponse.ok) {
-    console.error('Token exchange failed:', tokenData);
-    throw new Error(`Token exchange failed: ${tokenData.error}`);
+    const errorText = await tokenResponse.text();
+    console.error('Token exchange failed:', errorText);
+    throw new Error(`Token exchange failed: ${errorText}`);
   }
 
+  const tokenData = await tokenResponse.json();
   return tokenData.access_token;
 };
 
@@ -101,9 +104,14 @@ serve(async (req) => {
 
   try {
     const { message, sessionId, operation }: VertexAIRequest = await req.json();
-    const accessToken = await getAccessToken();
+    console.log('Received request:', { operation, sessionId, message: message.substring(0, 100) });
 
-    const baseUrl = 'https://us-central1-aiplatform.googleapis.com/v1/projects/adk-gp/locations/us-central1/reasoningEngines/1740192655234564096';
+    const accessToken = await getAccessToken();
+    const projectId = 'adk-gp';
+    const location = 'us-central1';
+    const reasoningEngineId = '1740192655234564096';
+
+    const baseUrl = `https://${location}-aiplatform.googleapis.com/v1/projects/${projectId}/locations/${location}/reasoningEngines/${reasoningEngineId}`;
     
     let url: string;
     let requestBody: any;
@@ -114,25 +122,29 @@ serve(async (req) => {
         requestBody = {
           input: {
             text: message
-          },
-          ...(sessionId && { session: sessionId })
+          }
         };
+        // Add session if provided
+        if (sessionId) {
+          requestBody.sessionId = sessionId;
+        }
         break;
       
       case 'create_session':
         url = `${baseUrl}:query`;
         requestBody = {
           input: {
-            text: "Create new session"
+            text: "Initialize new conversation session"
           }
         };
         break;
       
       case 'list_sessions':
+        // For listing sessions, we'll use a query operation
         url = `${baseUrl}:query`;
         requestBody = {
           input: {
-            text: "List sessions"
+            text: "List available sessions"
           }
         };
         break;
@@ -141,10 +153,12 @@ serve(async (req) => {
         url = `${baseUrl}:query`;
         requestBody = {
           input: {
-            text: `Get session ${sessionId}`
-          },
-          session: sessionId
+            text: `Get session information for ${sessionId}`
+          }
         };
+        if (sessionId) {
+          requestBody.sessionId = sessionId;
+        }
         break;
       
       case 'delete_session':
@@ -152,16 +166,18 @@ serve(async (req) => {
         requestBody = {
           input: {
             text: `Delete session ${sessionId}`
-          },
-          session: sessionId
+          }
         };
+        if (sessionId) {
+          requestBody.sessionId = sessionId;
+        }
         break;
       
       default:
         throw new Error(`Unsupported operation: ${operation}`);
     }
 
-    console.log('Making request to Vertex AI:', { url, operation, sessionId });
+    console.log('Making request to Vertex AI:', { url, requestBody });
 
     const response = await fetch(url, {
       method: 'POST',
@@ -174,24 +190,29 @@ serve(async (req) => {
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error('Vertex AI API error:', errorText);
+      console.error('Vertex AI API error:', response.status, errorText);
       throw new Error(`Vertex AI API error: ${response.status} ${errorText}`);
     }
 
-    // For streaming responses
+    // Handle streaming response for stream_query
     if (operation === 'stream_query') {
       const reader = response.body?.getReader();
+      if (!reader) {
+        throw new Error('No response body available for streaming');
+      }
+
       const stream = new ReadableStream({
         start(controller) {
           const pump = async () => {
             try {
               while (true) {
-                const { done, value } = await reader!.read();
+                const { done, value } = await reader.read();
                 if (done) break;
                 controller.enqueue(value);
               }
               controller.close();
             } catch (error) {
+              console.error('Streaming error:', error);
               controller.error(error);
             }
           };
@@ -202,13 +223,13 @@ serve(async (req) => {
       return new Response(stream, {
         headers: {
           ...corsHeaders,
-          'Content-Type': 'text/plain',
+          'Content-Type': 'text/plain; charset=utf-8',
           'Transfer-Encoding': 'chunked',
         },
       });
     }
 
-    // For non-streaming responses
+    // Handle regular JSON response
     const data = await response.json();
     console.log('Vertex AI response:', data);
 
@@ -222,7 +243,10 @@ serve(async (req) => {
   } catch (error) {
     console.error('Error in vertex-ai-agent function:', error);
     return new Response(
-      JSON.stringify({ error: error.message }),
+      JSON.stringify({ 
+        error: error.message,
+        details: 'Check the function logs for more information'
+      }),
       {
         status: 500,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },

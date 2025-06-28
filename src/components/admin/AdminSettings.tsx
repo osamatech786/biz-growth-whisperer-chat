@@ -8,12 +8,11 @@ import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 
 interface AdminSettingsData {
-  AI_API_KEY: string;
-  AI_API_URL: string;
+  GENERAL_SETTING: string;
 }
 
 const AdminSettings = () => {
-  const [settings, setSettings] = useState<AdminSettingsData>({ AI_API_KEY: '', AI_API_URL: '' });
+  const [settings, setSettings] = useState<AdminSettingsData>({ GENERAL_SETTING: '' });
   const { toast } = useToast();
 
   useEffect(() => {
@@ -25,11 +24,11 @@ const AdminSettings = () => {
       const { data, error } = await supabase
         .from('admin_settings')
         .select('setting_key, setting_value')
-        .in('setting_key', ['AI_API_KEY', 'AI_API_URL']);
+        .in('setting_key', ['GENERAL_SETTING']);
 
       if (error) throw error;
 
-      const settingsObj: AdminSettingsData = { AI_API_KEY: '', AI_API_URL: '' };
+      const settingsObj: AdminSettingsData = { GENERAL_SETTING: '' };
       data?.forEach(setting => {
         settingsObj[setting.setting_key as keyof AdminSettingsData] = setting.setting_value || '';
       });
@@ -70,41 +69,28 @@ const AdminSettings = () => {
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <Settings className="w-5 h-5" />
-          AI Settings
+          General Settings
         </CardTitle>
       </CardHeader>
-      <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div>
-          <label htmlFor="api-key" className="block text-sm font-medium text-gray-700 mb-2">
-            AI API Key
-          </label>
-          <div className="flex gap-2">
-            <Input
-              id="api-key"
-              type="password"
-              value={settings.AI_API_KEY}
-              onChange={(e) => setSettings(prev => ({ ...prev, AI_API_KEY: e.target.value }))}
-              placeholder="sk-..."
-            />
-            <Button onClick={() => updateSetting('AI_API_KEY', settings.AI_API_KEY)}>
-              <Key className="w-4 h-4" />
-            </Button>
-          </div>
+      <CardContent className="space-y-4">
+        <div className="text-sm text-gray-600 p-4 bg-gray-50 rounded-lg">
+          <p className="font-medium mb-2">AI Configuration</p>
+          <p>The AI chat is powered by Vertex AI using a service account configuration. The authentication is handled securely through environment variables.</p>
         </div>
-
+        
         <div>
-          <label htmlFor="api-url" className="block text-sm font-medium text-gray-700 mb-2">
-            AI API URL
+          <label htmlFor="general-setting" className="block text-sm font-medium text-gray-700 mb-2">
+            General Setting
           </label>
           <div className="flex gap-2">
             <Input
-              id="api-url"
-              type="url"
-              value={settings.AI_API_URL}
-              onChange={(e) => setSettings(prev => ({ ...prev, AI_API_URL: e.target.value }))}
-              placeholder="https://api.openai.com/v1"
+              id="general-setting"
+              type="text"
+              value={settings.GENERAL_SETTING}
+              onChange={(e) => setSettings(prev => ({ ...prev, GENERAL_SETTING: e.target.value }))}
+              placeholder="Enter general setting value"
             />
-            <Button onClick={() => updateSetting('AI_API_URL', settings.AI_API_URL)}>
+            <Button onClick={() => updateSetting('GENERAL_SETTING', settings.GENERAL_SETTING)}>
               <Key className="w-4 h-4" />
             </Button>
           </div>

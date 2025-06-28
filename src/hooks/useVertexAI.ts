@@ -14,6 +14,8 @@ export const useVertexAI = () => {
   const createSession = async (): Promise<string> => {
     setIsLoading(true);
     try {
+      console.log('Creating new Vertex AI session...');
+      
       const { data, error } = await supabase.functions.invoke('vertex-ai-agent', {
         body: {
           message: 'Create new session',
@@ -21,11 +23,15 @@ export const useVertexAI = () => {
         }
       });
 
-      if (error) throw error;
+      if (error) {
+        console.error('Error creating session:', error);
+        throw error;
+      }
       
       // Generate a unique session ID for tracking
       const sessionId = crypto.randomUUID();
       setCurrentSession(sessionId);
+      console.log('Created session with ID:', sessionId);
       return sessionId;
     } catch (error) {
       console.error('Error creating session:', error);
@@ -35,9 +41,77 @@ export const useVertexAI = () => {
     }
   };
 
+  const sendMessage = async (message: string, sessionId?: string): Promise<string> => {
+    setIsLoading(true);
+    try {
+      console.log('Sending message to Vertex AI:', { message: message.substring(0, 50), sessionId });
+      
+      const { data, error } = await supabase.functions.invoke('vertex-ai-agent', {
+        body: {
+          message,
+          sessionId: sessionId || currentSession,
+          operation: 'stream_query'
+        }
+      });
+
+      if (error) {
+        console.error('Error sending message:', error);
+        throw error;
+      }
+      
+      console.log('Received response from Vertex AI:', data);
+      
+      // Handle different response formats from Vertex AI
+      if (data) {
+        // If it's a direct string response
+        if (typeof data === 'string') {
+          return data;
+        }
+        
+        // If it's an object with a response field
+        if (data.response) {
+          return data.response;
+        }
+        
+        // If it's a candidates array (typical Vertex AI format)
+        if (data.candidates && Array.isArray(data.candidates) && data.candidates.length > 0) {
+          const candidate = data.candidates[0];
+          if (candidate.content) {
+            return candidate.content;
+          }
+          if (candidate.output) {
+            return candidate.output;
+          }
+        }
+        
+        // If it's a direct output field
+        if (data.output) {
+          return data.output;
+        }
+        
+        // If it's a predictions array
+        if (data.predictions && Array.isArray(data.predictions) && data.predictions.length > 0) {
+          return data.predictions[0].content || data.predictions[0].output || JSON.stringify(data.predictions[0]);
+        }
+        
+        // Fallback: return stringified data
+        return JSON.stringify(data);
+      }
+      
+      return "I apologize, but I couldn't process your request. Please try again.";
+    } catch (error) {
+      console.error('Error sending message:', error);
+      throw error;
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const streamQuery = async (message: string, sessionId?: string): Promise<ReadableStream> => {
     setIsLoading(true);
     try {
+      console.log('Starting stream query...');
+      
       const { data, error } = await supabase.functions.invoke('vertex-ai-agent', {
         body: {
           message,
@@ -69,37 +143,6 @@ export const useVertexAI = () => {
     }
   };
 
-  const sendMessage = async (message: string, sessionId?: string): Promise<string> => {
-    try {
-      const { data, error } = await supabase.functions.invoke('vertex-ai-agent', {
-        body: {
-          message,
-          sessionId: sessionId || currentSession,
-          operation: 'stream_query'
-        }
-      });
-
-      if (error) throw error;
-      
-      // Extract the text response from the Vertex AI response
-      if (data && typeof data === 'object') {
-        // Handle the Vertex AI response format
-        if (data.candidates && data.candidates.length > 0) {
-          return data.candidates[0].content || data.candidates[0].text || JSON.stringify(data);
-        }
-        if (data.response) {
-          return data.response;
-        }
-        return JSON.stringify(data);
-      }
-      
-      return data || "I apologize, but I couldn't process your request at the moment. Please try again.";
-    } catch (error) {
-      console.error('Error sending message:', error);
-      throw error;
-    }
-  };
-
   const listSessions = async (): Promise<VertexAISession[]> => {
     setIsLoading(true);
     try {
@@ -113,7 +156,7 @@ export const useVertexAI = () => {
       if (error) throw error;
       
       // Parse response to extract session information
-      return data.sessions || [];
+      return data?.sessions || [];
     } catch (error) {
       console.error('Error listing sessions:', error);
       return [];
