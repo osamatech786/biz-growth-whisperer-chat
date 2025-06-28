@@ -38,10 +38,10 @@ export const useVertexAI = () => {
   const streamQuery = async (message: string, sessionId?: string): Promise<ReadableStream> => {
     setIsLoading(true);
     try {
-      const response = await fetch(`${supabase.supabaseUrl}/functions/v1/vertex-ai-agent`, {
+      const response = await fetch('https://zjcwdbwqjdzksoqxkfvv.supabase.co/functions/v1/vertex-ai-agent', {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${supabase.supabaseKey}`,
+          'Authorization': `Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpqY3dkYndxamR6a3NvcXhrZnZ2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDk5MDkxODIsImV4cCI6MjA2NTQ4NTE4Mn0.jp1xuOVeBEVH6EZ8MwjA2Wky4AREUKpx-BeRo-vLFaY`,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
