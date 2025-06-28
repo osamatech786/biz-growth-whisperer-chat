@@ -38,24 +38,29 @@ export const useVertexAI = () => {
   const streamQuery = async (message: string, sessionId?: string): Promise<ReadableStream> => {
     setIsLoading(true);
     try {
-      const response = await fetch('https://zjcwdbwqjdzksoqxkfvv.supabase.co/functions/v1/vertex-ai-agent', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpqY3dkYndxamR6a3NvcXhrZnZ2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDk5MDkxODIsImV4cCI6MjA2NTQ4NTE4Mn0.jp1xuOVeBEVH6EZ8MwjA2Wky4AREUKpx-BeRo-vLFaY`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
+      const { data, error } = await supabase.functions.invoke('vertex-ai-agent', {
+        body: {
           message,
           sessionId: sessionId || currentSession,
           operation: 'stream_query'
-        }),
+        }
       });
 
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+      if (error) throw error;
+
+      // Convert the response to a ReadableStream if it's not already
+      if (data && typeof data === 'string') {
+        const encoder = new TextEncoder();
+        return new ReadableStream({
+          start(controller) {
+            controller.enqueue(encoder.encode(data));
+            controller.close();
+          }
+        });
       }
 
-      return response.body!;
+      // If it's already a stream, return it
+      return data;
     } catch (error) {
       console.error('Error streaming query:', error);
       throw error;
@@ -65,22 +70,33 @@ export const useVertexAI = () => {
   };
 
   const sendMessage = async (message: string, sessionId?: string): Promise<string> => {
-    const stream = await streamQuery(message, sessionId);
-    const reader = stream.getReader();
-    let result = '';
-
     try {
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        
-        const chunk = new TextDecoder().decode(value);
-        result += chunk;
+      const { data, error } = await supabase.functions.invoke('vertex-ai-agent', {
+        body: {
+          message,
+          sessionId: sessionId || currentSession,
+          operation: 'stream_query'
+        }
+      });
+
+      if (error) throw error;
+      
+      // Extract the text response from the Vertex AI response
+      if (data && typeof data === 'object') {
+        // Handle the Vertex AI response format
+        if (data.candidates && data.candidates.length > 0) {
+          return data.candidates[0].content || data.candidates[0].text || JSON.stringify(data);
+        }
+        if (data.response) {
+          return data.response;
+        }
+        return JSON.stringify(data);
       }
       
-      return result;
-    } finally {
-      reader.releaseLock();
+      return data || "I apologize, but I couldn't process your request at the moment. Please try again.";
+    } catch (error) {
+      console.error('Error sending message:', error);
+      throw error;
     }
   };
 

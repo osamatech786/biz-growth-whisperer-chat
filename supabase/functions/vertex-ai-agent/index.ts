@@ -36,11 +36,20 @@ const getAccessToken = async () => {
     exp: now + 3600
   };
 
-  // Import the private key
-  const privateKeyPem = serviceAccount.private_key;
+  // Import the private key - fix the key format
+  const privateKeyPem = serviceAccount.private_key
+    .replace(/\\n/g, '\n')
+    .replace(/-----BEGIN PRIVATE KEY-----/, '-----BEGIN PRIVATE KEY-----\n')
+    .replace(/-----END PRIVATE KEY-----/, '\n-----END PRIVATE KEY-----');
+
+  const privateKeyDer = Uint8Array.from(
+    atob(privateKeyPem.replace(/-----BEGIN PRIVATE KEY-----\n/, '').replace(/\n-----END PRIVATE KEY-----/, '').replace(/\n/g, '')),
+    c => c.charCodeAt(0)
+  );
+
   const privateKey = await crypto.subtle.importKey(
     'pkcs8',
-    new TextEncoder().encode(privateKeyPem.replace(/\\n/g, '\n')),
+    privateKeyDer,
     {
       name: 'RSASSA-PKCS1-v1_5',
       hash: 'SHA-256',
@@ -50,6 +59,7 @@ const getAccessToken = async () => {
   );
 
   // Create JWT
+  const encoder = new TextEncoder();
   const headerB64 = btoa(JSON.stringify(header)).replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_');
   const payloadB64 = btoa(JSON.stringify(payload)).replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_');
   const dataToSign = `${headerB64}.${payloadB64}`;
@@ -57,7 +67,7 @@ const getAccessToken = async () => {
   const signature = await crypto.subtle.sign(
     'RSASSA-PKCS1-v1_5',
     privateKey,
-    new TextEncoder().encode(dataToSign)
+    encoder.encode(dataToSign)
   );
   
   const signatureB64 = btoa(String.fromCharCode(...new Uint8Array(signature)))
@@ -75,6 +85,12 @@ const getAccessToken = async () => {
   });
 
   const tokenData = await tokenResponse.json();
+  
+  if (!tokenResponse.ok) {
+    console.error('Token exchange failed:', tokenData);
+    throw new Error(`Token exchange failed: ${tokenData.error}`);
+  }
+
   return tokenData.access_token;
 };
 

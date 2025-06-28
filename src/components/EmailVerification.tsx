@@ -23,31 +23,27 @@ const EmailVerification = ({ onVerified }: EmailVerificationProps) => {
 
     setLoading(true);
     try {
-      // Generate 6-digit code
-      const verificationCode = Math.floor(100000 + Math.random() * 900000).toString();
-      
-      // Store verification code in database
-      const { error } = await supabase
-        .from('email_verifications')
-        .insert({
-          email: email.toLowerCase(),
-          verification_code: verificationCode,
-          expires_at: new Date(Date.now() + 10 * 60 * 1000).toISOString() // 10 minutes
-        });
+      // Use Supabase's built-in Email OTP service
+      const { error } = await supabase.auth.signInWithOtp({
+        email: email.toLowerCase(),
+        options: {
+          shouldCreateUser: true,
+        }
+      });
 
       if (error) throw error;
 
       toast({
         title: "Verification code sent!",
-        description: `Code sent to ${email}. For demo purposes, your code is: ${verificationCode}`,
+        description: `Please check your email at ${email} for the verification code.`,
       });
 
       setStep('code');
-    } catch (error) {
+    } catch (error: any) {
       console.error('Verification code send failed:', error);
       toast({
         title: "Error",
-        description: "Failed to send verification code. Please try again.",
+        description: error.message || "Failed to send verification code. Please try again.",
         variant: "destructive"
       });
     }
@@ -60,38 +56,28 @@ const EmailVerification = ({ onVerified }: EmailVerificationProps) => {
 
     setLoading(true);
     try {
-      // Check verification code
-      const { data, error } = await supabase
-        .from('email_verifications')
-        .select('*')
-        .eq('email', email.toLowerCase())
-        .eq('verification_code', code)
-        .eq('verified', false)
-        .gte('expires_at', new Date().toISOString())
-        .order('created_at', { ascending: false })
-        .limit(1);
-
-      if (error || !data || data.length === 0) {
-        throw new Error('Invalid or expired verification code');
-      }
-
-      // Mark as verified
-      await supabase
-        .from('email_verifications')
-        .update({ verified: true })
-        .eq('id', data[0].id);
-
-      toast({
-        title: "Email verified!",
-        description: "You can now access the chat.",
+      // Verify the OTP code with Supabase
+      const { data, error } = await supabase.auth.verifyOtp({
+        email: email.toLowerCase(),
+        token: code,
+        type: 'email'
       });
 
-      onVerified(email.toLowerCase());
-    } catch (error) {
+      if (error) throw error;
+
+      if (data.user) {
+        toast({
+          title: "Email verified!",
+          description: "You can now access the chat.",
+        });
+
+        onVerified(email.toLowerCase());
+      }
+    } catch (error: any) {
       console.error('Verification failed:', error);
       toast({
         title: "Verification failed",
-        description: "Invalid or expired code. Please try again.",
+        description: error.message || "Invalid or expired code. Please try again.",
         variant: "destructive"
       });
     }
