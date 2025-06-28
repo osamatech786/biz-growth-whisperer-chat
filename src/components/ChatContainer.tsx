@@ -1,4 +1,3 @@
-
 import { useState } from 'react';
 import ChatMessage from '@/components/ChatMessage';
 import MessageInput from '@/components/MessageInput';
@@ -18,9 +17,10 @@ interface ChatContainerProps {
   messages: Message[];
   setMessages: React.Dispatch<React.SetStateAction<Message[]>>;
   sessionToken: string;
+  userEmail?: string;
 }
 
-const ChatContainer = ({ messages, setMessages, sessionToken }: ChatContainerProps) => {
+const ChatContainer = ({ messages, setMessages, sessionToken, userEmail }: ChatContainerProps) => {
   const [isTyping, setIsTyping] = useState(false);
   const { sendMessage, currentSession, setCurrentSession } = useVertexAI();
 
@@ -57,8 +57,8 @@ const ChatContainer = ({ messages, setMessages, sessionToken }: ChatContainerPro
     setIsTyping(true);
 
     try {
-      // Send message to Vertex AI agent
-      const aiResponse = await sendMessage(content, sessionToken);
+      // Send message to Vertex AI agent with user email
+      const aiResponse = await sendMessage(content, sessionToken, userEmail);
       
       const aiMessage: Message = {
         id: (Date.now() + 1).toString(),

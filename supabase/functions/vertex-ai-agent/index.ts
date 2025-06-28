@@ -10,6 +10,7 @@ interface VertexAIRequest {
   message: string;
   sessionId?: string;
   operation: 'stream_query' | 'create_session' | 'list_sessions' | 'get_session' | 'delete_session';
+  userId?: string;
 }
 
 const getAccessToken = async () => {
@@ -103,8 +104,8 @@ serve(async (req) => {
   }
 
   try {
-    const { message, sessionId, operation }: VertexAIRequest = await req.json();
-    console.log('Received request:', { operation, sessionId, message: message.substring(0, 100) });
+    const { message, sessionId, operation, userId }: VertexAIRequest = await req.json();
+    console.log('Received request:', { operation, sessionId, userId, message: message?.substring(0, 100) });
 
     const accessToken = await getAccessToken();
     const projectId = 'adk-gp';
@@ -117,34 +118,34 @@ serve(async (req) => {
     let requestBody: any;
 
     switch (operation) {
-      case 'stream_query':
-        url = `${baseUrl}:streamQuery`;
-        requestBody = {
-          input: {
-            text: message
-          }
-        };
-        // Add session if provided
-        if (sessionId) {
-          requestBody.sessionId = sessionId;
-        }
-        break;
-      
       case 'create_session':
         url = `${baseUrl}:query`;
         requestBody = {
+          class_method: "create_session",
           input: {
-            text: "Initialize new conversation session"
+            user_id: userId || "anonymous"
+          }
+        };
+        break;
+      
+      case 'stream_query':
+        url = `${baseUrl}:streamQuery`;
+        requestBody = {
+          class_method: "stream_query",
+          input: {
+            user_id: userId || "anonymous",
+            session_id: sessionId,
+            message: message
           }
         };
         break;
       
       case 'list_sessions':
-        // For listing sessions, we'll use a query operation
         url = `${baseUrl}:query`;
         requestBody = {
+          class_method: "list_sessions",
           input: {
-            text: "List available sessions"
+            user_id: userId || "anonymous"
           }
         };
         break;
@@ -152,25 +153,23 @@ serve(async (req) => {
       case 'get_session':
         url = `${baseUrl}:query`;
         requestBody = {
+          class_method: "get_session",
           input: {
-            text: `Get session information for ${sessionId}`
+            user_id: userId || "anonymous",
+            session_id: sessionId
           }
         };
-        if (sessionId) {
-          requestBody.sessionId = sessionId;
-        }
         break;
       
       case 'delete_session':
         url = `${baseUrl}:query`;
         requestBody = {
+          class_method: "delete_session",
           input: {
-            text: `Delete session ${sessionId}`
+            user_id: userId || "anonymous",
+            session_id: sessionId
           }
         };
-        if (sessionId) {
-          requestBody.sessionId = sessionId;
-        }
         break;
       
       default:
@@ -183,7 +182,7 @@ serve(async (req) => {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${accessToken}`,
-        'Content-Type': 'application/json',
+        'Content-Type': 'application/json; charset=utf-8',
       },
       body: JSON.stringify(requestBody),
     });

@@ -1,4 +1,3 @@
-
 import { useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 
@@ -11,15 +10,16 @@ export const useVertexAI = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [currentSession, setCurrentSession] = useState<string | null>(null);
 
-  const createSession = async (): Promise<string> => {
+  const createSession = async (userId?: string): Promise<string> => {
     setIsLoading(true);
     try {
-      console.log('Creating new Vertex AI session...');
+      console.log('Creating new Vertex AI session for user:', userId);
       
       const { data, error } = await supabase.functions.invoke('vertex-ai-agent', {
         body: {
           message: 'Create new session',
-          operation: 'create_session'
+          operation: 'create_session',
+          userId: userId
         }
       });
 
@@ -28,8 +28,19 @@ export const useVertexAI = () => {
         throw error;
       }
       
-      // Generate a unique session ID for tracking
-      const sessionId = crypto.randomUUID();
+      console.log('Session creation response:', data);
+      
+      // Extract session ID from response
+      let sessionId: string;
+      if (data?.session_id) {
+        sessionId = data.session_id;
+      } else if (data?.predictions && data.predictions[0]?.session_id) {
+        sessionId = data.predictions[0].session_id;
+      } else {
+        // Fallback to generating a UUID if no session ID returned
+        sessionId = crypto.randomUUID();
+      }
+      
       setCurrentSession(sessionId);
       console.log('Created session with ID:', sessionId);
       return sessionId;
@@ -41,16 +52,21 @@ export const useVertexAI = () => {
     }
   };
 
-  const sendMessage = async (message: string, sessionId?: string): Promise<string> => {
+  const sendMessage = async (message: string, sessionId?: string, userId?: string): Promise<string> => {
     setIsLoading(true);
     try {
-      console.log('Sending message to Vertex AI:', { message: message.substring(0, 50), sessionId });
+      console.log('Sending message to Vertex AI:', { 
+        message: message.substring(0, 50), 
+        sessionId: sessionId || currentSession,
+        userId 
+      });
       
       const { data, error } = await supabase.functions.invoke('vertex-ai-agent', {
         body: {
           message,
           sessionId: sessionId || currentSession,
-          operation: 'stream_query'
+          operation: 'stream_query',
+          userId: userId
         }
       });
 
@@ -91,7 +107,17 @@ export const useVertexAI = () => {
         
         // If it's a predictions array
         if (data.predictions && Array.isArray(data.predictions) && data.predictions.length > 0) {
-          return data.predictions[0].content || data.predictions[0].output || JSON.stringify(data.predictions[0]);
+          const prediction = data.predictions[0];
+          if (prediction.content) {
+            return prediction.content;
+          }
+          if (prediction.output) {
+            return prediction.output;
+          }
+          if (prediction.response) {
+            return prediction.response;
+          }
+          return JSON.stringify(prediction);
         }
         
         // Fallback: return stringified data

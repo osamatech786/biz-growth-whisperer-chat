@@ -154,8 +154,8 @@ const Index = () => {
 
   const handleStartNewChat = async () => {
     try {
-      // Create new session in Vertex AI
-      const vertexSessionId = await createVertexSession();
+      // Create new session in Vertex AI with user email
+      const vertexSessionId = await createVertexSession(session?.email);
       
       // Create new local session token
       const newToken = startNewChat();
@@ -220,6 +220,7 @@ const Index = () => {
           messages={messages}
           setMessages={setMessages}
           sessionToken={sessionToken}
+          userEmail={session?.email}
         />
 
         {/* Background Elements */}
